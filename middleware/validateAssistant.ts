@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from "express";
+import { NextFunction, Request, Response } from "express";
 
 const VALID_MODELS = [
   "gpt-4",
@@ -6,6 +6,7 @@ const VALID_MODELS = [
   "gpt-4-turbo-preview",
   "gpt-3.5-turbo",
   "gpt-3.5-turbo-16k",
+  "gpt-4o",
 ];
 
 export const validateCreateAssistant = (
@@ -31,7 +32,9 @@ export const validateCreateAssistant = (
 
   if (!model || typeof model !== "string" || !VALID_MODELS.includes(model)) {
     res.status(400).json({
-      error: `Valid model is required. Allowed models: ${VALID_MODELS.join(", ")}`,
+      error: `Valid model is required. Allowed models: ${VALID_MODELS.join(
+        ", "
+      )}`,
     });
     return;
   }
@@ -51,7 +54,10 @@ export const validateUpdateAssistant = (
 ): void => {
   const { name, instructions, model, tools } = req.body;
 
-  if (name !== undefined && (typeof name !== "string" || name.trim().length === 0)) {
+  if (
+    name !== undefined &&
+    (typeof name !== "string" || name.trim().length === 0)
+  ) {
     res.status(400).json({ error: "Name must be a non-empty string" });
     return;
   }
@@ -64,9 +70,14 @@ export const validateUpdateAssistant = (
     return;
   }
 
-  if (model !== undefined && (typeof model !== "string" || !VALID_MODELS.includes(model))) {
+  if (
+    model !== undefined &&
+    (typeof model !== "string" || !VALID_MODELS.includes(model))
+  ) {
     res.status(400).json({
-      error: `Valid model is required. Allowed models: ${VALID_MODELS.join(", ")}`,
+      error: `Valid model is required. Allowed models: ${VALID_MODELS.join(
+        ", "
+      )}`,
     });
     return;
   }
