@@ -42,41 +42,7 @@ app.get("/", (req: Request, res: Response) => {
     message: "Welcome to AI Chatbot Backend API",
     version: "1.0.0",
     status: "online",
-    endpoints: {
-      chat: {
-        sendMessage: "POST /ask",
-        getHistory: "GET /ask/history/:threadId",
-        createThread: "POST /ask/thread"
-      },
-      assistants: {
-        create: "POST /api/assistant",
-        list: "GET /api/assistant",
-        retrieve: "GET /api/assistant/:id",
-        update: "PUT /api/assistant/:id",
-        delete: "DELETE /api/assistant/:id",
-        trainWebsite: "POST /api/assistant/:id/train-website"
-      },
-      leads: {
-        create: "POST /api/leads",
-        list: "GET /api/leads",
-        retrieve: "GET /api/leads/:id",
-        update: "PUT /api/leads/:id",
-        delete: "DELETE /api/leads/:id",
-        markContacted: "PATCH /api/leads/:id/contact"
-      },
-      unknownQuestions: {
-        list: "GET /api/unknown-questions",
-        resolve: "PATCH /api/unknown-questions/:id/resolve",
-        delete: "DELETE /api/unknown-questions/:id"
-      },
-      scraping: {
-        startJob: "POST /api/scrape",
-        checkStatus: "GET /api/status/:jobId",
-        getResult: "GET /api/result/:jobId"
-      },
-      health: "GET /health"
-    },
-    documentation: "https://github.com/your-repo/chatbot-backend",
+    documentation: "https://testchatbot-backend-r5hb.vercel.app",
     timestamp: new Date().toISOString()
   });
 });
