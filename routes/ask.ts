@@ -3,7 +3,7 @@ import {
   handleAsk,
   handleCreateThread,
   handleGetHistory,
-} from "../controller/chatController";
+} from "../controllers/chatController";
 
 export const askRouter = Router();
 

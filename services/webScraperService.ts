@@ -105,8 +105,8 @@ export async function scrapeWebsiteOptimized(
   let failedScrapes = 0;
   let scrapingMethod: "sitemap" | "recursive_crawl" = "recursive_crawl";
 
-  // Concurrency limit - scrape 5 pages at a time
-  const limiter = new ConcurrencyLimiter(5);
+  // Concurrency limit - scrape 10 pages at a time for better performance
+  const limiter = new ConcurrencyLimiter(10);
 
   // Axios config with reasonable timeouts
   const axiosConfig: AxiosRequestConfig = {
@@ -205,7 +205,7 @@ async function fetchSitemapUrls(
           .filter(Boolean);
 
         // Fetch subsitemaps with concurrency control
-        const subLimiter = new ConcurrencyLimiter(3);
+        const subLimiter = new ConcurrencyLimiter(5);
         const subResults = await Promise.allSettled(
           subSitemaps.map((smUrl: string) =>
             subLimiter.run(async () => {

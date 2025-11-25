@@ -17,7 +17,7 @@ import {
   retrieveThread,
   runThread,
   trainFromWebsite,
-} from "../controller/assistantController";
+} from "../controllers/assistantController";
 import {
   validateCreateAssistant,
   validateIdParam,

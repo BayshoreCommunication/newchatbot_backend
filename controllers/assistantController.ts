@@ -4,7 +4,7 @@ import { Request, Response } from "express";
 import fs from "fs";
 import OpenAI from "openai";
 import path from "path";
-import { AssistantModel } from "../model/assistantModel";
+import { AssistantModel } from "../models/assistantModel";
 
 const openai = new OpenAI();
 

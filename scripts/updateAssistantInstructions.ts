@@ -1,9 +1,9 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import { OpenAI } from "openai";
 import mongoose from "mongoose";
-import { AssistantModel } from "../model/assistantModel";
+import { OpenAI } from "openai";
+import { AssistantModel } from "../models/assistantModel";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -119,7 +119,9 @@ async function updateAssistantInstructions() {
       process.exit(1);
     }
 
-    console.log(`Updating assistant: ${assistant.name} (${assistant.openaiId})`);
+    console.log(
+      `Updating assistant: ${assistant.name} (${assistant.openaiId})`
+    );
 
     // Update in OpenAI
     await openai.beta.assistants.update(assistant.openaiId, {

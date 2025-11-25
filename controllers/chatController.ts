@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { OpenAI } from "openai";
-import { AssistantModel } from "../model/assistantModel";
+import { AssistantModel } from "../models/assistantModel";
+import Lead from "../models/Lead";
+import UnknownQuestion from "../models/UnknownQuestion";
 import {
   addMessageToHistory,
   getHistoryByThread,
@@ -116,7 +118,9 @@ export async function handleAsk(req: Request, res: Response) {
       if (runs.data.length > 0) {
         const lastRun = runs.data[0];
         if (lastRun.status === "in_progress" || lastRun.status === "queued") {
-          console.error(`Cancelling active run: ${lastRun.id} (status: ${lastRun.status})`);
+          console.error(
+            `Cancelling active run: ${lastRun.id} (status: ${lastRun.status})`
+          );
           await openai.beta.threads.runs.cancel(lastRun.id, {
             thread_id: savedThreadId,
           });
@@ -143,7 +147,11 @@ export async function handleAsk(req: Request, res: Response) {
     // Attach vector store to the run if the assistant has one
     console.error("Checking vector stores - assistant exists:", !!assistant);
     console.error("Vector store IDs:", assistant?.vectorStoreIds);
-    if (assistant && assistant.vectorStoreIds && assistant.vectorStoreIds.length > 0) {
+    if (
+      assistant &&
+      assistant.vectorStoreIds &&
+      assistant.vectorStoreIds.length > 0
+    ) {
       console.error("Attaching vector stores:", assistant.vectorStoreIds);
       runParams.tool_resources = {
         file_search: {
@@ -179,10 +187,9 @@ export async function handleAsk(req: Request, res: Response) {
       "runIdCopy:",
       runIdCopy
     );
-    let runStatus = await openai.beta.threads.runs.retrieve(
-      run.id,
-      { thread_id: savedThreadId }
-    );
+    let runStatus = await openai.beta.threads.runs.retrieve(run.id, {
+      thread_id: savedThreadId,
+    });
     let attempts = 0;
     const maxAttempts = 60; // 60 seconds timeout (increased for vector search)
 
@@ -194,11 +201,14 @@ export async function handleAsk(req: Request, res: Response) {
       attempts < maxAttempts
     ) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      runStatus = await openai.beta.threads.runs.retrieve(
-        run.id,
-        { thread_id: savedThreadId }
+      runStatus = await openai.beta.threads.runs.retrieve(run.id, {
+        thread_id: savedThreadId,
+      });
+      console.error(
+        `Run status: ${runStatus.status} (attempt ${
+          attempts + 1
+        }/${maxAttempts})`
       );
-      console.error(`Run status: ${runStatus.status} (attempt ${attempts + 1}/${maxAttempts})`);
       attempts++;
     }
 
@@ -249,6 +259,131 @@ export async function handleAsk(req: Request, res: Response) {
       // Clean up extra spaces but preserve newlines
       answer = answer.replace(/ {2,}/g, " "); // Replace multiple spaces with single space
       answer = answer.trim();
+    }
+
+    // Detect unknown questions (when assistant doesn't have the info)
+    try {
+      const unknownIndicators = [
+        "I don't have that specific",
+        "I don't have that detail",
+        "don't have that information",
+        "Our attorney can provide",
+        "Attorney Carter can give you",
+        "I don't have those exact details",
+        "Great question for our legal team",
+        "don't have the exact",
+      ];
+
+      const isUnknownQuestion = unknownIndicators.some((indicator) =>
+        answer.toLowerCase().includes(indicator.toLowerCase())
+      );
+
+      if (isUnknownQuestion) {
+        // Save to unknown questions database
+        await UnknownQuestion.create({
+          question: message,
+          assistantId: assistantId,
+          threadId: savedThreadId,
+          userMessage: message,
+          assistantResponse: answer,
+        });
+        console.log("Unknown question saved:", message);
+      }
+    } catch (detectError) {
+      console.error("Error detecting/saving unknown question:", detectError);
+      // Don't fail the request if logging fails
+    }
+
+    // Detect and save leads (when user provides contact information)
+    try {
+      // Extract name, phone, email from user message
+      const nameMatch = message.match(
+        /(?:name is|i'm|my name is|i am)\s+([a-z]+(?:\s+[a-z]+)*)/i
+      );
+      const phoneMatch = message.match(
+        /(\d{3}[-.\s]?\d{3}[-.\s]?\d{4}|\d{10})/
+      );
+      const emailMatch = message.match(
+        /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9_-]+)/
+      );
+
+      // Check if assistant asked for contact info in response
+      const contactRequestIndicators = [
+        "can I get your name",
+        "share your name",
+        "phone number",
+        "what's your name",
+        "may I have your name",
+      ];
+
+      const isAskingForContact = contactRequestIndicators.some((indicator) =>
+        answer.toLowerCase().includes(indicator.toLowerCase())
+      );
+
+      // Save lead if we have any contact info
+      if (nameMatch || phoneMatch || emailMatch) {
+        // Get conversation history to create summary
+        let conversationSummary = "";
+        try {
+          const threadMessages = await openai.beta.threads.messages.list(
+            savedThreadId,
+            {
+              limit: 10,
+              order: "desc",
+            }
+          );
+
+          // Build conversation summary from recent messages
+          const recentMessages = threadMessages.data.reverse().slice(0, 10);
+          conversationSummary = recentMessages
+            .map((msg: any) => {
+              const role = msg.role === "user" ? "User" : "Assistant";
+              const content =
+                msg.content[0].type === "text"
+                  ? msg.content[0].text.value.substring(0, 200)
+                  : "";
+              return `${role}: ${content}`;
+            })
+            .join("\n");
+        } catch (summaryError) {
+          console.error("Error creating conversation summary:", summaryError);
+          conversationSummary = `User: ${message}\nAssistant: ${answer}`;
+        }
+
+        // Check if lead already exists for this thread
+        const existingLead = await Lead.findOne({ threadId: savedThreadId });
+
+        if (existingLead) {
+          // Update existing lead
+          const updateData: any = {};
+          if (nameMatch && nameMatch[1]) updateData.name = nameMatch[1].trim();
+          if (phoneMatch && phoneMatch[0])
+            updateData.phone = phoneMatch[0].replace(/[-.\s]/g, "");
+          if (emailMatch && emailMatch[0]) updateData.email = emailMatch[0];
+          updateData.conversationSummary = conversationSummary;
+
+          await Lead.findByIdAndUpdate(existingLead._id, updateData);
+          console.log("Lead updated:", updateData);
+        } else {
+          // Create new lead
+          const leadData: any = {
+            assistantId: assistantId,
+            threadId: savedThreadId,
+            conversationSummary: conversationSummary,
+          };
+
+          if (nameMatch && nameMatch[1]) leadData.name = nameMatch[1].trim();
+          if (phoneMatch && phoneMatch[0])
+            leadData.phone = phoneMatch[0].replace(/[-.\s]/g, "");
+          if (emailMatch && emailMatch[0]) leadData.email = emailMatch[0];
+
+          await Lead.create(leadData);
+          console.log("New lead saved:", leadData);
+        }
+      }
+    } catch (leadError) {
+      console.error("Error detecting/saving lead:", leadError);
+      // Don't fail the request if lead logging fails
     }
 
     // Store in history if organizationId provided

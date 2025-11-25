@@ -1,4 +1,4 @@
-import { ChatMessageModel } from "../model/chatMessageModel";
+import { ChatMessageModel } from "../models/chatMessageModel";
 
 export type ChatMessage = {
   sender: "user" | "ai";

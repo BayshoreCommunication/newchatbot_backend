@@ -1,9 +1,9 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-import { OpenAI } from "openai";
 import mongoose from "mongoose";
-import { AssistantModel } from "../model/assistantModel";
+import { OpenAI } from "openai";
+import { AssistantModel } from "../models/assistantModel";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -18,10 +18,7 @@ async function migrateAssistantToVectorStore() {
     // Find assistant with files but no vector store
     const assistant = await AssistantModel.findOne({
       fileIds: { $exists: true, $ne: [] },
-      $or: [
-        { vectorStoreIds: { $exists: false } },
-        { vectorStoreIds: [] },
-      ],
+      $or: [{ vectorStoreIds: { $exists: false } }, { vectorStoreIds: [] }],
     });
 
     if (!assistant) {
@@ -29,7 +26,9 @@ async function migrateAssistantToVectorStore() {
       process.exit(0);
     }
 
-    console.log(`Migrating assistant: ${assistant.name} (${assistant.openaiId})`);
+    console.log(
+      `Migrating assistant: ${assistant.name} (${assistant.openaiId})`
+    );
     console.log(`Files: ${assistant.fileIds?.length || 0}`);
 
     if (!assistant.fileIds || assistant.fileIds.length === 0) {
