@@ -378,6 +378,9 @@ async function scrapePageWithLinks(
     if (!link || /^(mailto:|tel:|javascript:|#)/i.test(link)) return;
 
     try {
+      // Decode HTML entities in URLs (e.g., &#x27; -> ')
+      link = $('<div>').html(link).text();
+
       const absoluteUrl = new URL(link, url).href;
       if (new URL(absoluteUrl).hostname === baseDomain) {
         links.push(absoluteUrl);

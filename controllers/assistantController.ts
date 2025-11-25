@@ -10,12 +10,15 @@ const openai = new OpenAI();
 
 const createAssistant = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, instructions, tools = [], model } = req.body;
+    const { name, instructions, tools = [] } = req.body;
+    // Fixed model: gpt-4o-mini for cost optimization (90% savings vs gpt-4o)
+    const fixedModel = "gpt-4o-mini";
+
     const assistant = await openai.beta.assistants.create({
       name,
       instructions,
       tools,
-      model,
+      model: fixedModel,
     });
     // Store in DB
     const dbAssistant = new AssistantModel({
@@ -23,7 +26,7 @@ const createAssistant = async (req: Request, res: Response): Promise<void> => {
       name,
       instructions,
       tools,
-      model,
+      model: fixedModel,
       metadata: {
         openaiCreatedAt: assistant.created_at,
         openaiObject: assistant.object,
@@ -92,7 +95,7 @@ const retrieveAssistant = async (
 
 const modifyAssistant = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, instructions, tools, model } = req.body;
+    const { name, instructions, tools } = req.body;
     const assistant = await AssistantModel.findById(req.params.id);
 
     if (!assistant) {
@@ -100,18 +103,21 @@ const modifyAssistant = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
+    // Fixed model: gpt-4o-mini (model cannot be changed)
+    const fixedModel = "gpt-4o-mini";
+
     // Update OpenAI assistant
     await openai.beta.assistants.update(assistant.openaiId, {
       name,
       instructions,
       tools,
-      model,
+      model: fixedModel,
     });
 
     // Update DB
     const updatedAssistant = await AssistantModel.findByIdAndUpdate(
       req.params.id,
-      { name, instructions, tools, model },
+      { name, instructions, tools, model: fixedModel },
       { new: true }
     );
 

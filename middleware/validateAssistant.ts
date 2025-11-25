@@ -1,20 +1,14 @@
 import { NextFunction, Request, Response } from "express";
 
-const VALID_MODELS = [
-  "gpt-4",
-  "gpt-4-turbo",
-  "gpt-4-turbo-preview",
-  "gpt-3.5-turbo",
-  "gpt-3.5-turbo-16k",
-  "gpt-4o",
-];
+// Fixed model for cost optimization - no longer user-selectable
+const FIXED_MODEL = "gpt-4o-mini";
 
 export const validateCreateAssistant = (
   req: Request,
   res: Response,
   next: NextFunction
 ): void => {
-  const { name, instructions, model } = req.body;
+  const { name, instructions } = req.body;
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
     res.status(400).json({ error: "Valid name is required" });
@@ -30,11 +24,10 @@ export const validateCreateAssistant = (
     return;
   }
 
-  if (!model || typeof model !== "string" || !VALID_MODELS.includes(model)) {
+  // Model is no longer accepted from user - automatically set to gpt-4o-mini
+  if (req.body.model) {
     res.status(400).json({
-      error: `Valid model is required. Allowed models: ${VALID_MODELS.join(
-        ", "
-      )}`,
+      error: `Model cannot be specified. All assistants use ${FIXED_MODEL} for cost optimization.`,
     });
     return;
   }
@@ -52,7 +45,7 @@ export const validateUpdateAssistant = (
   res: Response,
   next: NextFunction
 ): void => {
-  const { name, instructions, model, tools } = req.body;
+  const { name, instructions, tools } = req.body;
 
   if (
     name !== undefined &&
@@ -70,14 +63,10 @@ export const validateUpdateAssistant = (
     return;
   }
 
-  if (
-    model !== undefined &&
-    (typeof model !== "string" || !VALID_MODELS.includes(model))
-  ) {
+  // Model cannot be changed - locked to gpt-4o-mini
+  if (req.body.model) {
     res.status(400).json({
-      error: `Valid model is required. Allowed models: ${VALID_MODELS.join(
-        ", "
-      )}`,
+      error: `Model cannot be changed. All assistants are locked to ${FIXED_MODEL} for cost optimization.`,
     });
     return;
   }

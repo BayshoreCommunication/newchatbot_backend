@@ -7,6 +7,7 @@ import {
   addMessageToHistory,
   getHistoryByThread,
 } from "../services/chatService";
+import { getCached, setCached } from "../utils/redisCache";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -28,6 +29,25 @@ export async function handleAsk(req: Request, res: Response) {
   }
 
   try {
+    // Check cache for common questions (save API costs)
+    const normalizedMessage = message.toLowerCase().trim();
+    const cacheKey = `response:${assistantId}:${normalizedMessage}`;
+
+    try {
+      const cached = await getCached<any>(cacheKey);
+      if (cached && threadId) {
+        // Only use cache if we have an existing thread (not first message)
+        console.log("✅ Cache hit - saved OpenAI API cost!");
+        return res.json({
+          text: cached.text,
+          threadId: cached.threadId || threadId,
+          fromCache: true,
+        });
+      }
+    } catch (cacheError) {
+      console.error("Cache check failed (continuing without cache):", cacheError);
+      // Continue without cache if Redis is unavailable
+    }
     // Ensure threadId is properly handled - convert undefined/null/empty string to null
     let currentThreadId: string | null = null;
     if (
@@ -142,6 +162,7 @@ export async function handleAsk(req: Request, res: Response) {
     // Run the assistant with vector store if available
     const runParams: any = {
       assistant_id: assistantId,
+      max_completion_tokens: 150, // Limit response length to reduce costs (perfect for brief responses)
     };
 
     // Attach vector store to the run if the assistant has one
@@ -164,6 +185,19 @@ export async function handleAsk(req: Request, res: Response) {
 
     const run = await openai.beta.threads.runs.create(savedThreadId, runParams);
 
+    // Detailed logging for debugging
+    console.log("\n╔══════════════════════════════════════════════════════════════╗");
+    console.log("║                    OPENAI API CALL DETAILS                   ║");
+    console.log("╚══════════════════════════════════════════════════════════════╝");
+    console.log("📞 Assistant ID:", run.assistant_id);
+    console.log("🤖 Model Being Used:", run.model);
+    console.log("📝 Instructions Preview:", run.instructions ? run.instructions.substring(0, 200) + "..." : "None");
+    console.log("🔧 Max Completion Tokens:", run.max_completion_tokens);
+    console.log("🧵 Thread ID:", savedThreadId);
+    console.log("🏃 Run ID:", run.id);
+    console.log("⚙️  Tools Enabled:", run.tools.map((t: any) => t.type).join(", "));
+    console.log("╚══════════════════════════════════════════════════════════════╝\n");
+
     // Validate run ID
     console.error("Run object:", JSON.stringify(run, null, 2));
     if (!run.id) {
@@ -178,7 +212,7 @@ export async function handleAsk(req: Request, res: Response) {
       throw new Error("Invalid run ID format: " + run.id);
     }
 
-    // Wait for the run to complete (simple polling - in production, use webhooks)
+    // Wait for the run to complete with exponential backoff (reduces API calls)
     const threadIdCopy = String(savedThreadId);
     const runIdCopy = String(run.id);
     console.error(
@@ -191,7 +225,10 @@ export async function handleAsk(req: Request, res: Response) {
       thread_id: savedThreadId,
     });
     let attempts = 0;
-    const maxAttempts = 60; // 60 seconds timeout (increased for vector search)
+    const maxAttempts = 30; // Reduced max attempts with exponential backoff
+
+    // Exponential backoff delays: check quickly at first, then slow down
+    const delays = [500, 500, 1000, 1000, 2000, 3000, 5000]; // milliseconds
 
     while (
       runStatus.status !== "completed" &&
@@ -200,14 +237,18 @@ export async function handleAsk(req: Request, res: Response) {
       runStatus.status !== "cancelled" &&
       attempts < maxAttempts
     ) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Use exponential backoff delay
+      const delayIndex = Math.min(attempts, delays.length - 1);
+      const delay = delays[delayIndex];
+      await new Promise((resolve) => setTimeout(resolve, delay));
+
       runStatus = await openai.beta.threads.runs.retrieve(run.id, {
         thread_id: savedThreadId,
       });
       console.error(
         `Run status: ${runStatus.status} (attempt ${
           attempts + 1
-        }/${maxAttempts})`
+        }/${maxAttempts}, delay: ${delay}ms)`
       );
       attempts++;
     }
@@ -260,6 +301,16 @@ export async function handleAsk(req: Request, res: Response) {
       answer = answer.replace(/ {2,}/g, " "); // Replace multiple spaces with single space
       answer = answer.trim();
     }
+
+    // Log the conversation exchange
+    console.log("\n╔══════════════════════════════════════════════════════════════╗");
+    console.log("║                    CONVERSATION EXCHANGE                     ║");
+    console.log("╚══════════════════════════════════════════════════════════════╝");
+    console.log("👤 USER ASKED:");
+    console.log(message);
+    console.log("\n🤖 AI RESPONDED:");
+    console.log(answer);
+    console.log("╚══════════════════════════════════════════════════════════════╝\n");
 
     // Detect unknown questions (when assistant doesn't have the info)
     try {
@@ -398,6 +449,25 @@ export async function handleAsk(req: Request, res: Response) {
         text: answer,
         timestamp: Date.now(),
       });
+    }
+
+    // Cache the response for future queries (if not personalized)
+    const hasPersonalInfo = /\b(name|phone|email|number)\b/i.test(answer);
+    if (!hasPersonalInfo && answer.length > 10) {
+      try {
+        await setCached(
+          cacheKey,
+          {
+            text: answer,
+            threadId: savedThreadId,
+          },
+          300 // 5 minutes TTL for common questions
+        );
+        console.log("💾 Response cached for future queries");
+      } catch (cacheError) {
+        console.error("Failed to cache response:", cacheError);
+        // Continue even if caching fails
+      }
     }
 
     res.json({
