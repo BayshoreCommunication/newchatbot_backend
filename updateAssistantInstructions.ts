@@ -134,7 +134,7 @@ async function updateAssistantInstructions() {
     console.log("Connected to MongoDB");
 
     // You can update by name or by direct OpenAI ID
-    const ASSISTANT_OPENAI_ID = "asst_BCf70jDt0jllFYXxW3Ptm56n"; // Your old assistant ID
+    const ASSISTANT_OPENAI_ID = "asst_dTLkYWbqQ8TzwhIBFw3YokcC"; // Current assistant ID
 
     // Try to find assistant in database first
     let assistant = await AssistantModel.findOne({
