@@ -39,7 +39,8 @@ This information was added to the knowledge base on ${new Date().toISOString()}
 `;
 
     // Create temporary file with the Q&A content
-    const tempDir = path.join(__dirname, "..", "temp");
+    // Use /tmp for serverless environments (Vercel, AWS Lambda, etc.)
+    const tempDir = process.env.VERCEL ? "/tmp" : path.join(__dirname, "..", "temp");
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
@@ -136,7 +137,8 @@ export const batchAddKnowledge = async (req: Request, res: Response) => {
     });
 
     // Create temporary file
-    const tempDir = path.join(__dirname, "..", "temp");
+    // Use /tmp for serverless environments (Vercel, AWS Lambda, etc.)
+    const tempDir = process.env.VERCEL ? "/tmp" : path.join(__dirname, "..", "temp");
     if (!fs.existsSync(tempDir)) {
       fs.mkdirSync(tempDir, { recursive: true });
     }
