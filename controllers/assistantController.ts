@@ -409,13 +409,13 @@ const trainFromWebsite = async (req: Request, res: Response): Promise<void> => {
         // Use existing vector store and add the new file to it
         vectorStoreId = assistant.vectorStoreIds[0];
         console.log("Adding file to existing vector store:", vectorStoreId);
-        await openai.vectorStores.files.create(vectorStoreId, {
+        await (openai as any).vectorStores.files.create(vectorStoreId, {
           file_id: file.id,
         });
       } else {
         // Create new vector store with the file
         console.log("Creating new vector store");
-        const vectorStore = await openai.vectorStores.create({
+        const vectorStore = await (openai as any).vectorStores.create({
           name: `${assistant.name} Knowledge Base`,
           file_ids: [file.id],
         });

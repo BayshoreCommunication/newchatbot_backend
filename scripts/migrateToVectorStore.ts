@@ -37,7 +37,7 @@ async function migrateAssistantToVectorStore() {
     }
 
     // Create vector store with existing files
-    const vectorStore = await openai.vectorStores.create({
+    const vectorStore = await openai.beta.vector_stores.create({
       name: `${assistant.name} Knowledge Base`,
       file_ids: assistant.fileIds,
     });

@@ -19,10 +19,10 @@ async function attachVectorStore() {
 
     // List all vector stores
     console.log("\nListing available vector stores...");
-    const vectorStores = await openai.beta.vectorStores.list({ limit: 20 });
+    const vectorStores = await openai.beta.vector_stores.list({ limit: 20 });
     console.log(`Found ${vectorStores.data.length} vector store(s):`);
 
-    vectorStores.data.forEach((vs, index) => {
+    vectorStores.data.forEach((vs: OpenAI.Beta.VectorStore, index: number) => {
       console.log(`\n${index + 1}. Vector Store:`);
       console.log(`   ID: ${vs.id}`);
       console.log(`   Name: ${vs.name}`);
@@ -32,7 +32,7 @@ async function attachVectorStore() {
 
     // If vector stores exist, attach the first one with files
     const vectorStoreWithFiles = vectorStores.data.find(
-      (vs) => vs.file_counts && vs.file_counts.total > 0
+      (vs: OpenAI.Beta.VectorStore) => vs.file_counts && vs.file_counts.total > 0
     );
 
     if (vectorStoreWithFiles) {

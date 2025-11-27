@@ -4,7 +4,6 @@
   "description": "AI Assistant Chatbot Backend for carterinjurylaw.com",
   "main": "dist/index.js",
   "scripts": {
-    "prepare": "chmod +x node_modules/.bin/tsc || true",
     "dev": "nodemon --watch . --ext ts --exec ts-node index.ts",
     "build": "npx tsc",
     "start": "node dist/index.js"

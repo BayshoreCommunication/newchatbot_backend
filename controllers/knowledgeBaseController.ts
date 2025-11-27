@@ -64,7 +64,7 @@ This information was added to the knowledge base on ${new Date().toISOString()}
     if (assistant.vectorStoreIds && assistant.vectorStoreIds.length > 0) {
       const vectorStoreId = assistant.vectorStoreIds[0];
 
-      await (openai.beta as any).vectorStores.files.create(vectorStoreId, {
+      await (openai as any).vectorStores.files.create(vectorStoreId, {
         file_id: file.id,
       });
 
@@ -161,7 +161,7 @@ export const batchAddKnowledge = async (req: Request, res: Response) => {
     if (assistant.vectorStoreIds && assistant.vectorStoreIds.length > 0) {
       const vectorStoreId = assistant.vectorStoreIds[0];
 
-      await (openai.beta as any).vectorStores.files.create(vectorStoreId, {
+      await (openai as any).vectorStores.files.create(vectorStoreId, {
         file_id: file.id,
       });
 
@@ -237,7 +237,7 @@ export const getKnowledgeBaseStats = async (req: Request, res: Response) => {
     let vectorStoreInfo = null;
 
     if (vectorStoreId) {
-      const vectorStore = await (openai.beta as any).vectorStores.retrieve(vectorStoreId);
+      const vectorStore = await (openai as any).vectorStores.retrieve(vectorStoreId);
       vectorStoreInfo = {
         id: vectorStore.id,
         name: vectorStore.name,
