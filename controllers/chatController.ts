@@ -291,8 +291,13 @@ export async function handleAsk(req: Request, res: Response) {
     const responseContent = assistantMessage.content[0];
 
     let answer = "";
+    let citations: any[] = [];
+
     if (responseContent.type === "text") {
       answer = responseContent.text.value;
+
+      // Extract citations before removing them
+      citations = responseContent.text.annotations || [];
 
       // Remove citation markers like 【93:0†source】
       answer = answer.replace(/【[^】]*】/g, "");
@@ -301,6 +306,62 @@ export async function handleAsk(req: Request, res: Response) {
       answer = answer.replace(/ {2,}/g, " "); // Replace multiple spaces with single space
       answer = answer.trim();
     }
+
+    // Log file search sources used
+    console.log("\n╔══════════════════════════════════════════════════════════════╗");
+    console.log("║                    FILE SEARCH SOURCES USED                  ║");
+    console.log("╚══════════════════════════════════════════════════════════════╝");
+
+    if (citations.length > 0) {
+      console.log(`📚 Found ${citations.length} source citation(s):\n`);
+
+      for (let i = 0; i < citations.length; i++) {
+        const citation = citations[i];
+        console.log(`Citation ${i + 1}:`);
+        console.log(`  Type: ${citation.type}`);
+
+        if (citation.type === 'file_citation' && citation.file_citation) {
+          console.log(`  File ID: ${citation.file_citation.file_id}`);
+
+          // Try to get file details
+          try {
+            const fileDetails = await openai.files.retrieve(citation.file_citation.file_id);
+            console.log(`  ✅ File Name: ${fileDetails.filename}`);
+            console.log(`  📄 File Purpose: ${fileDetails.purpose}`);
+            console.log(`  📦 File Size: ${fileDetails.bytes} bytes`);
+          } catch (fileError) {
+            console.log(`  ⚠️  File Name: [Could not retrieve file details]`);
+          }
+
+          if (citation.file_citation.quote) {
+            const quotePreview = citation.file_citation.quote.substring(0, 200);
+            console.log(`  📖 Quoted Text: "${quotePreview}${citation.file_citation.quote.length > 200 ? '...' : ''}"`);
+          }
+        } else if (citation.type === 'file_path' && citation.file_path) {
+          console.log(`  File ID: ${citation.file_path.file_id}`);
+
+          // Try to get file details
+          try {
+            const fileDetails = await openai.files.retrieve(citation.file_path.file_id);
+            console.log(`  ✅ File Name: ${fileDetails.filename}`);
+            console.log(`  📄 File Purpose: ${fileDetails.purpose}`);
+          } catch (fileError) {
+            console.log(`  ⚠️  File Name: [Could not retrieve file details]`);
+          }
+        }
+
+        console.log(`  📍 Text Location: ${citation.text || 'N/A'}`);
+        console.log(`  🔢 Start Index: ${citation.start_index}`);
+        console.log(`  🔢 End Index: ${citation.end_index}`);
+        console.log('');
+      }
+      console.log(`✅ KNOWLEDGE BASE WAS USED - Answer is based on ${citations.length} file source(s)`);
+    } else {
+      console.log("⚠️  NO FILE SEARCH SOURCES WERE USED");
+      console.log("ℹ️  This means the AI answered without searching the knowledge base files");
+      console.log("⚡ The response was generated from the AI's instructions or general knowledge");
+    }
+    console.log("╚══════════════════════════════════════════════════════════════╝\n");
 
     // Log the conversation exchange
     console.log("\n╔══════════════════════════════════════════════════════════════╗");

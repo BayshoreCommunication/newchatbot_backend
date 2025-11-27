@@ -13,6 +13,7 @@ const { connectMongo } = require("./config/db");
 const assistantRouter = require("./routes/assistantRoutes").default;
 const unknownQuestionRouter = require("./routes/unknownQuestionRoutes").default;
 const leadRouter = require("./routes/leadRoutes").default;
+const knowledgeBaseRouter = require("./routes/knowledgeBaseRoutes").default;
 
 const app = express();
 
@@ -74,6 +75,7 @@ app.use("/api", scrapeRouter);
 app.use("/api", assistantRouter);
 app.use("/api", unknownQuestionRouter);
 app.use("/api", leadRouter);
+app.use("/api", knowledgeBaseRouter);
 
 // Connect to MongoDB
 connectMongo();
