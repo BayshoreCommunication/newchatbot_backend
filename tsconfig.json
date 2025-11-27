@@ -7,5 +7,19 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["**/*"]
+  "include": [
+    "index.ts",
+    "controllers/**/*",
+    "models/**/*",
+    "routes/**/*",
+    "config/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "scripts",
+    "attachVectorStore.ts",
+    "testFileSearch.js",
+    "updateAssistantInstructions.ts"
+  ]
 }
