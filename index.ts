@@ -4,9 +4,17 @@ import cors from "cors";
 import compression from "compression";
 import rateLimit from "express-rate-limit";
 import mongoose from "mongoose";
+import session from "express-session";
+import passport from "passport";
+import configurePassport from "./config/passport";
+import subscriptionRoutes from "./routes/subscriptionRoutes";
+import { initializeCronJobs } from "./services/cronScheduler";
 
 config();
 
+// Import routes
+import authRoutes from "./routes/authRoutes";
+import userRoutes from "./routes/userRoutes";
 const { askRouter } = require("./routes/ask");
 const scrapeRouter = require("./routes/scrape").default;
 const { connectMongo } = require("./config/db");
@@ -17,6 +25,7 @@ const knowledgeBaseRouter = require("./routes/knowledgeBaseRoutes").default;
 
 const app = express();
 
+// Rate Limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -31,10 +40,34 @@ const chatLimiter = rateLimit({
   message: "Too many chat requests, please slow down.",
 });
 
+// Middleware
 app.use(cors());
 app.use(compression());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ 
+  limit: '10mb',
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(limiter);
+
+// Session Middleware for Passport
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'supersecretkey', // It's important to use an environment variable for this
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+        maxAge: 1000 * 60 * 60 * 24 // 1 day
+    }
+}));
+
+
+// Passport Middleware
+configurePassport();
+app.use(passport.initialize());
+app.use(passport.session());
+
 
 // Welcome endpoint
 app.get("/", (req: Request, res: Response) => {
@@ -70,15 +103,22 @@ app.get("/health", async (req: Request, res: Response) => {
   res.status(statusCode).json(healthStatus);
 });
 
+// API Routes
+app.use("/api/auth", authRoutes);
+app.use("/api", userRoutes);
 app.use("/ask", chatLimiter, askRouter);
 app.use("/api", scrapeRouter);
 app.use("/api", assistantRouter);
 app.use("/api", unknownQuestionRouter);
 app.use("/api", leadRouter);
 app.use("/api", knowledgeBaseRouter);
+app.use("/api/subscription", subscriptionRoutes);
 
 // Connect to MongoDB
 connectMongo();
+
+// Initialize cron jobs and email service
+initializeCronJobs();
 
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {

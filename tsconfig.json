@@ -12,7 +12,10 @@
     "controllers/**/*",
     "models/**/*",
     "routes/**/*",
-    "config/**/*"
+    "config/**/*",
+    "utils/**/*",
+    "middleware/**/*",
+    "services/**/*"
   ],
   "exclude": [
     "node_modules",
