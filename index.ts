@@ -1,10 +1,10 @@
+import compression from "compression";
+import cors from "cors";
 import { config } from "dotenv";
 import express, { Request, Response } from "express";
-import cors from "cors";
-import compression from "compression";
 import rateLimit from "express-rate-limit";
-import mongoose from "mongoose";
 import session from "express-session";
+import mongoose from "mongoose";
 import passport from "passport";
 import configurePassport from "./config/passport";
 import subscriptionRoutes from "./routes/subscriptionRoutes";
@@ -14,6 +14,7 @@ config();
 
 // Import routes
 import authRoutes from "./routes/authRoutes";
+import unifiedScrapingRoutes from "./routes/unifiedScraping";
 import userRoutes from "./routes/userRoutes";
 const { askRouter } = require("./routes/ask");
 const scrapeRouter = require("./routes/scrape").default;
@@ -43,31 +44,33 @@ const chatLimiter = rateLimit({
 // Middleware
 app.use(cors());
 app.use(compression());
-app.use(express.json({ 
-  limit: '10mb',
-  verify: (req: any, res, buf) => {
-    req.rawBody = buf;
-  }
-}));
+app.use(
+  express.json({
+    limit: "10mb",
+    verify: (req: any, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(limiter);
 
 // Session Middleware for Passport
-app.use(session({
-    secret: process.env.SESSION_SECRET || 'supersecretkey', // It's important to use an environment variable for this
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "supersecretkey", // It's important to use an environment variable for this
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-        maxAge: 1000 * 60 * 60 * 24 // 1 day
-    }
-}));
-
+      secure: process.env.NODE_ENV === "production", // Use secure cookies in production
+      maxAge: 1000 * 60 * 60 * 24, // 1 day
+    },
+  })
+);
 
 // Passport Middleware
 configurePassport();
 app.use(passport.initialize());
 app.use(passport.session());
-
 
 // Welcome endpoint
 app.get("/", (req: Request, res: Response) => {
@@ -77,7 +80,7 @@ app.get("/", (req: Request, res: Response) => {
     version: "1.0.0",
     status: "online",
     documentation: "https://testchatbot-backend-r5hb.vercel.app",
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   });
 });
 
@@ -89,14 +92,16 @@ app.get("/health", async (req: Request, res: Response) => {
     uptime: process.uptime(),
     services: {
       api: "operational",
-      mongodb: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+      mongodb:
+        mongoose.connection.readyState === 1 ? "connected" : "disconnected",
       memory: {
         used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + " MB",
-        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + " MB"
-      }
+        total:
+          Math.round(process.memoryUsage().heapTotal / 1024 / 1024) + " MB",
+      },
     },
     version: "1.0.0",
-    environment: process.env.NODE_ENV || "development"
+    environment: process.env.NODE_ENV || "development",
   };
 
   const statusCode = healthStatus.services.mongodb === "connected" ? 200 : 503;
@@ -113,6 +118,7 @@ app.use("/api", unknownQuestionRouter);
 app.use("/api", leadRouter);
 app.use("/api", knowledgeBaseRouter);
 app.use("/api/subscription", subscriptionRoutes);
+app.use("/api/unified-scraping", unifiedScrapingRoutes);
 
 // Connect to MongoDB
 connectMongo();

@@ -8,6 +8,7 @@ import {
   getPaymentFailedEmail,
   getTrialEndingEmail,
 } from "../services/emailTemplates";
+import { getOTPEmail } from "../services/otpTemplate";
 
 dotenv.config();
 
@@ -218,6 +219,20 @@ export const sendTrialEndingEmail = async (
   }
 };
 
+/**
+ * Send OTP Email
+ */
+export const sendOTPEmail = async (email: string, otp: string) => {
+  try {
+    const template = getOTPEmail(otp);
+    await sendEmail(email, template.subject, template.html);
+    console.log(`[Email Service] OTP sent to ${email}`);
+  } catch (error) {
+    console.error(`[Email Service] Failed to send OTP to ${email}:`, error);
+    throw error;
+  }
+};
+
 // Export for testing SMTP configuration
 export { transporter };
 
@@ -228,5 +243,6 @@ export default {
   sendRenewalReminderEmail,
   sendPaymentFailedEmail,
   sendTrialEndingEmail,
+  sendOTPEmail,
   verifyEmailConnection,
 };

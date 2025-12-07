@@ -11,47 +11,21 @@ const generateToken = (id: string) => {
 };
 
 /**
- * @desc    Register a new user
+ * @desc    Register a new user (DEPRECATED - Use OTP flow instead)
  * @route   POST /api/auth/signup
  * @access  Public
+ * @deprecated Use /api/auth/send-otp and /api/auth/verify-otp instead
  */
 export const signup = async (req: Request, res: Response) => {
-  const { email, password, companyName, companyType, website, language, timezone } = req.body;
-
-  if (!email || !password) {
-    return res.status(400).json({ message: "Please provide email and password" });
-  }
-
-  try {
-    const userExists = await User.findOne({ email });
-
-    if (userExists) {
-      return res.status(400).json({ message: "User already exists" });
+  return res.status(403).json({
+    success: false,
+    message: "Direct signup is disabled. Please use OTP verification flow.",
+    instructions: {
+      step1: "Send POST to /api/auth/send-otp with { email }",
+      step2: "Check your email for OTP (valid for 2 minutes)",
+      step3: "Send POST to /api/auth/verify-otp with { email, otp, password, companyName, ... }"
     }
-
-    const user = await User.create({
-      email,
-      password,
-      companyName,
-      companyType,
-      website,
-      language,
-      timezone,
-    });
-
-    if (user) {
-      res.status(201).json({
-        _id: user._id,
-        email: user.email,
-        companyName: user.companyName,
-        token: generateToken(user._id.toString()),
-      });
-    } else {
-      res.status(400).json({ message: "Invalid user data" });
-    }
-  } catch (error: any) {
-    res.status(500).json({ message: "Server Error", error: error.message });
-  }
+  });
 };
 
 /**
@@ -62,26 +36,51 @@ export const signup = async (req: Request, res: Response) => {
 export const signin = async (req: Request, res: Response) => {
   const { email, password } = req.body;
 
+  console.log("🔐 [Backend signin] Request received for:", email);
+
   if (!email || !password) {
+    console.log("❌ [Backend signin] Missing credentials");
     return res.status(400).json({ message: "Please provide email and password" });
   }
 
   try {
+    console.log("🔍 [Backend signin] Looking up user in database...");
     const user = await User.findOne({ email });
 
-    if (user && (await user.comparePassword(password))) {
-      res.json({
+    if (!user) {
+      console.log("❌ [Backend signin] User not found");
+      return res.status(401).json({ message: "Invalid email or password" });
+    }
+
+    console.log("✅ [Backend signin] User found, comparing password...");
+    const isPasswordValid = await user.comparePassword(password);
+
+    if (isPasswordValid) {
+      console.log("✅ [Backend signin] Password valid, generating token...");
+      const token = generateToken(user._id.toString());
+
+      const response = {
         _id: user._id,
         email: user.email,
         companyName: user.companyName,
         subscription: user.subscription,
-        token: generateToken(user._id.toString()),
+        token: token,
+      };
+
+      console.log("✅ [Backend signin] Sending success response:", {
+        _id: response._id,
+        email: response.email,
+        hasToken: !!response.token,
       });
+
+      return res.json(response);
     } else {
-      res.status(401).json({ message: "Invalid email or password" });
+      console.log("❌ [Backend signin] Invalid password");
+      return res.status(401).json({ message: "Invalid email or password" });
     }
   } catch (error: any) {
-    res.status(500).json({ message: "Server Error", error: error.message });
+    console.error("💥 [Backend signin] Exception:", error);
+    return res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
 
@@ -119,9 +118,12 @@ export const googleAuthCallback = (req: Request, res: Response) => {
 };
 
 /**
- * @desc    Sync Google user with backend (for NextAuth integration)
+ * @desc    Google Login/Signup (Single route for both signin and signup)
  * @route   POST /api/auth/google/sync
  * @access  Public
+ * @info    Automatically handles both login and signup:
+ *          - If email exists in database → Login (return existing user + token)
+ *          - If email doesn't exist → Signup (create new user + return token)
  */
 export const googleSync = async (req: Request, res: Response) => {
   const { googleId, email, name, avatar } = req.body;
@@ -131,40 +133,21 @@ export const googleSync = async (req: Request, res: Response) => {
   }
 
   try {
-    // Check if user already exists by Google ID
-    let user = await User.findOne({ googleId });
+    // Check if user exists by email (primary identifier)
+    let user = await User.findOne({ email });
 
     if (user) {
-      // User exists, update avatar if provided
-      if (avatar && !user.avatar) {
-        user.avatar = avatar;
-        await user.save();
+      // ===== USER EXISTS - SIGNIN FLOW =====
+      // Update Google ID if not already linked
+      if (!user.googleId) {
+        user.googleId = googleId;
       }
 
-      const token = generateToken(user._id.toString());
-      return res.status(200).json({
-        user: {
-          _id: user._id,
-          email: user.email,
-          companyName: user.companyName,
-          companyType: user.companyType,
-          website: user.website,
-          avatar: user.avatar,
-          subscription: user.subscription,
-        },
-        token,
-      });
-    }
-
-    // Check if user exists by email (might have registered with credentials)
-    user = await User.findOne({ email });
-
-    if (user) {
-      // Link Google ID to existing account
-      user.googleId = googleId;
+      // Update avatar if not already set
       if (avatar && !user.avatar) {
         user.avatar = avatar;
       }
+
       await user.save();
 
       const token = generateToken(user._id.toString());
@@ -179,10 +162,11 @@ export const googleSync = async (req: Request, res: Response) => {
           subscription: user.subscription,
         },
         token,
+        isNewUser: false,
       });
     }
 
-    // Create new user
+    // ===== USER DOESN'T EXIST - SIGNUP FLOW =====
     const newUser = await User.create({
       googleId,
       email,
@@ -206,9 +190,10 @@ export const googleSync = async (req: Request, res: Response) => {
         subscription: newUser.subscription,
       },
       token,
+      isNewUser: true,
     });
   } catch (error: any) {
-    console.error("Google sync error:", error);
+    console.error("Google auth error:", error);
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 };

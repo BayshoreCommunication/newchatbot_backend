@@ -1,14 +1,14 @@
 import { Request, Response } from "express";
-import stripe from "../utils/stripe";
-import User from "../models/userModel";
+import { getPlanFromPriceId, getPriceId } from "../config/pricing";
 import Subscription from "../models/subscriptionModel";
+import User from "../models/userModel";
 import {
-  sendSubscriptionSuccessEmail,
-  sendSubscriptionCancelledEmail,
-  sendRenewalReminderEmail,
   sendPaymentFailedEmail,
+  sendRenewalReminderEmail,
+  sendSubscriptionCancelledEmail,
+  sendSubscriptionSuccessEmail,
 } from "../utils/emailService";
-import { getPriceId, getPlanFromPriceId, PRICING_PLANS } from "../config/pricing";
+import stripe from "../utils/stripe";
 
 export const createCheckoutSession = async (req: Request, res: Response) => {
   try {
@@ -17,12 +17,16 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
     const userEmail = (req as any).user.email;
 
     if (!planId || !interval) {
-        return res.status(400).json({ message: "Plan ID and billing interval are required." });
+      return res
+        .status(400)
+        .json({ message: "Plan ID and billing interval are required." });
     }
 
     const priceId = getPriceId(planId, interval as "month" | "year");
     if (!priceId) {
-      return res.status(400).json({ message: "Invalid plan or interval selected" });
+      return res
+        .status(400)
+        .json({ message: "Invalid plan or interval selected" });
     }
 
     // Check if user already has a stripe customer ID
@@ -31,9 +35,9 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
 
     // Better: fetch from Subscription model if exists, or create new Customer
     let existingSub = await Subscription.findOne({ userId });
-    
+
     if (existingSub?.stripeCustomerId) {
-        customerId = existingSub.stripeCustomerId;
+      customerId = existingSub.stripeCustomerId;
     }
 
     if (!customerId) {
@@ -42,10 +46,10 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
         metadata: { userId: userId.toString() },
       });
       customerId = customer.id;
-      
+
       // Save customer ID to user immediately
       await User.findByIdAndUpdate(userId, {
-        "subscription.stripeCustomerId": customerId
+        "subscription.stripeCustomerId": customerId,
       });
     }
 
@@ -83,12 +87,14 @@ export const handleWebhook = async (req: Request, res: Response) => {
   try {
     // Use rawBody captured by express.json verify option in index.ts
     const payload = (req as any).rawBody;
-    
+
     if (!payload) {
-        console.error("[Webhook] Error: No rawBody found. Ensure express.json is configured with verify.");
-        return res.status(400).send("Webhook Error: No raw body");
+      console.error(
+        "[Webhook] Error: No rawBody found. Ensure express.json is configured with verify."
+      );
+      return res.status(400).send("Webhook Error: No raw body");
     }
-    
+
     event = stripe.webhooks.constructEvent(
       payload,
       sig,
@@ -140,7 +146,9 @@ const handleCheckoutSessionCompleted = async (session: any) => {
   const subscriptionId = session.subscription as string;
   const customerId = session.customer as string;
 
-  console.log(`[Webhook] Checkout session completed for user ${userId}, plan: ${plan}`);
+  console.log(
+    `[Webhook] Checkout session completed for user ${userId}, plan: ${plan}`
+  );
 
   // Retrieve subscription with retry logic to handle timing issues
   let stripeSub: any;
@@ -150,7 +158,11 @@ const handleCheckoutSessionCompleted = async (session: any) => {
   while (retryCount < maxRetries) {
     try {
       // If session.subscription is an object (expanded), use it directly
-      if (typeof session.subscription === 'object' && session.subscription !== null && retryCount === 0) {
+      if (
+        typeof session.subscription === "object" &&
+        session.subscription !== null &&
+        retryCount === 0
+      ) {
         stripeSub = session.subscription;
       } else {
         stripeSub = await stripe.subscriptions.retrieve(subscriptionId);
@@ -161,37 +173,46 @@ const handleCheckoutSessionCompleted = async (session: any) => {
         break; // Data is valid, exit retry loop
       } else if (stripeSub.start_date || stripeSub.billing_cycle_anchor) {
         // Fallback: calculate period end based on billing cycle
-        const periodStart = stripeSub.billing_cycle_anchor || stripeSub.start_date;
+        const periodStart =
+          stripeSub.billing_cycle_anchor || stripeSub.start_date;
         const periodEndDate = new Date(periodStart * 1000);
 
-        if (interval === 'year') {
+        if (interval === "year") {
           periodEndDate.setFullYear(periodEndDate.getFullYear() + 1);
         } else {
           periodEndDate.setMonth(periodEndDate.getMonth() + 1);
         }
 
         stripeSub.current_period_start = periodStart;
-        stripeSub.current_period_end = Math.floor(periodEndDate.getTime() / 1000);
+        stripeSub.current_period_end = Math.floor(
+          periodEndDate.getTime() / 1000
+        );
         break;
       } else {
         retryCount++;
         if (retryCount < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 500));
+          await new Promise((resolve) => setTimeout(resolve, 500));
         }
       }
     } catch (error) {
       console.error(`[Webhook] Error retrieving subscription:`, error);
       retryCount++;
       if (retryCount < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
   }
 
   // Final validation
-  if (!stripeSub || !stripeSub.current_period_end || !stripeSub.current_period_start) {
-    console.error(`[Webhook] ERROR: Missing period data after ${maxRetries} attempts`);
-    throw new Error('Invalid subscription data from Stripe');
+  if (
+    !stripeSub ||
+    !stripeSub.current_period_end ||
+    !stripeSub.current_period_start
+  ) {
+    console.error(
+      `[Webhook] ERROR: Missing period data after ${maxRetries} attempts`
+    );
+    throw new Error("Invalid subscription data from Stripe");
   }
 
   // Check if subscription already exists for this user
@@ -203,8 +224,12 @@ const handleCheckoutSessionCompleted = async (session: any) => {
     existingSub.stripeSubscriptionId = subscriptionId;
     existingSub.stripePriceId = stripeSub.items.data[0].price.id;
     existingSub.status = stripeSub.status;
-    existingSub.currentPeriodStart = new Date(stripeSub.current_period_start * 1000);
-    existingSub.currentPeriodEnd = new Date(stripeSub.current_period_end * 1000);
+    existingSub.currentPeriodStart = new Date(
+      stripeSub.current_period_start * 1000
+    );
+    existingSub.currentPeriodEnd = new Date(
+      stripeSub.current_period_end * 1000
+    );
     existingSub.cancelAtPeriodEnd = stripeSub.cancel_at_period_end;
     existingSub.plan = plan;
     existingSub.interval = interval;
@@ -239,7 +264,9 @@ const handleCheckoutSessionCompleted = async (session: any) => {
     "subscription.stripeCustomerId": customerId,
   });
 
-  console.log(`[Webhook] Subscription activated for user ${userId}, plan: ${plan}`);
+  console.log(
+    `[Webhook] Subscription activated for user ${userId}, plan: ${plan}`
+  );
 
   // Send confirmation email
   try {
@@ -276,30 +303,33 @@ const handleSubscriptionUpdated = async (stripeSub: any) => {
     // Try to identify plan if price changed
     const currentPriceId = stripeSub.items.data[0].price.id;
     if (sub.stripePriceId !== currentPriceId) {
-        const planId = getPlanFromPriceId(currentPriceId);
-        if (planId !== "unknown") {
-            sub.plan = planId;
-            sub.stripePriceId = currentPriceId;
-            if (stripeSub.items.data[0].price.recurring?.interval) {
-               sub.interval = stripeSub.items.data[0].price.recurring.interval;
-            }
+      const planId = getPlanFromPriceId(currentPriceId);
+      if (planId !== "unknown") {
+        sub.plan = planId;
+        sub.stripePriceId = currentPriceId;
+        if (stripeSub.items.data[0].price.recurring?.interval) {
+          sub.interval = stripeSub.items.data[0].price.recurring.interval;
         }
+      }
     }
 
     await sub.save();
 
     // Update User model
-    const isActive = stripeSub.status === "active" || stripeSub.status === "trialing";
+    const isActive =
+      stripeSub.status === "active" || stripeSub.status === "trialing";
 
     await User.findByIdAndUpdate(sub.userId, {
-        "subscription.isActive": isActive,
-        "subscription.plan": sub.plan,
-        "subscription.endDate": sub.currentPeriodEnd,
+      "subscription.isActive": isActive,
+      "subscription.plan": sub.plan,
+      "subscription.endDate": sub.currentPeriodEnd,
     });
 
-    console.log(`[Webhook] Subscription updated: ${sub.userId}, status: ${stripeSub.status}`);
+    console.log(
+      `[Webhook] Subscription updated: ${sub.userId}, status: ${stripeSub.status}`
+    );
   } else {
-      console.warn(`[Webhook] Subscription not found: ${stripeSub.id}`);
+    console.warn(`[Webhook] Subscription not found: ${stripeSub.id}`);
   }
 };
 
@@ -328,25 +358,31 @@ const handleSubscriptionDeleted = async (stripeSub: any) => {
           ? new Date(stripeSub.current_period_end * 1000)
           : sub.currentPeriodEnd;
 
-        await sendSubscriptionCancelledEmail(user.email, sub.plan, accessEndDate);
+        await sendSubscriptionCancelledEmail(
+          user.email,
+          sub.plan,
+          accessEndDate
+        );
         console.log(`[Webhook] Cancellation email sent to ${user.email}`);
       }
     } catch (emailError) {
       console.error(`[Webhook] Failed to send email:`, emailError);
     }
   } else {
-       // Fallback: try to find user by customer ID
-       const customerId = stripeSub.customer as string;
-       if (customerId) {
-           const user = await User.findOne({ "subscription.stripeCustomerId": customerId });
-           if (user) {
-               await User.findByIdAndUpdate(user._id, {
-                   "subscription.isActive": false,
-                   "subscription.plan": "none"
-               });
-               console.log(`[Webhook] Subscription cancelled (fallback): ${user._id}`);
-           }
-       }
+    // Fallback: try to find user by customer ID
+    const customerId = stripeSub.customer as string;
+    if (customerId) {
+      const user = await User.findOne({
+        "subscription.stripeCustomerId": customerId,
+      });
+      if (user) {
+        await User.findByIdAndUpdate(user._id, {
+          "subscription.isActive": false,
+          "subscription.plan": "none",
+        });
+        console.log(`[Webhook] Subscription cancelled (fallback): ${user._id}`);
+      }
+    }
   }
 };
 
@@ -357,7 +393,9 @@ const handleInvoicePaymentSucceeded = async (invoice: any) => {
     return; // Not a subscription invoice
   }
 
-  const sub = await Subscription.findOne({ stripeSubscriptionId: subscriptionId });
+  const sub = await Subscription.findOne({
+    stripeSubscriptionId: subscriptionId,
+  });
 
   if (sub) {
     sub.status = "active";
@@ -378,7 +416,9 @@ const handleInvoicePaymentFailed = async (invoice: any) => {
     return; // Not a subscription invoice
   }
 
-  const sub = await Subscription.findOne({ stripeSubscriptionId: subscriptionId });
+  const sub = await Subscription.findOne({
+    stripeSubscriptionId: subscriptionId,
+  });
 
   if (sub) {
     sub.status = "past_due";
@@ -401,101 +441,179 @@ const handleInvoicePaymentFailed = async (invoice: any) => {
 };
 
 export const cancelSubscription = async (req: Request, res: Response) => {
-    try {
-        const userId = (req as any).user._id;
-        const sub = await Subscription.findOne({ userId, status: "active" });
+  try {
+    const userId = (req as any).user._id;
+    const sub = await Subscription.findOne({ userId, status: "active" });
 
-        if (!sub) {
-            return res.status(404).json({ message: "No active subscription found" });
-        }
-
-        // Cancel at end of period in Stripe
-        await stripe.subscriptions.update(sub.stripeSubscriptionId, {
-            cancel_at_period_end: true
-        });
-        
-        // Webhook will handle the DB update eventually, but we can update local state optimistically or just let the user know
-        // Usually we wait for webhook, but we can also update `cancelAtPeriodEnd` locally
-        sub.cancelAtPeriodEnd = true;
-        await sub.save();
-
-        res.json({ message: "Subscription will be canceled at the end of the billing period." });
-
-    } catch (error) {
-        console.error("Error canceling subscription:", error);
-        res.status(500).json({ message: "Failed to cancel subscription" });
+    if (!sub) {
+      return res.status(404).json({ message: "No active subscription found" });
     }
-}
+
+    // Cancel at end of period in Stripe
+    await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+      cancel_at_period_end: true,
+    });
+
+    // Webhook will handle the DB update eventually, but we can update local state optimistically or just let the user know
+    // Usually we wait for webhook, but we can also update `cancelAtPeriodEnd` locally
+    sub.cancelAtPeriodEnd = true;
+    await sub.save();
+
+    res.json({
+      message:
+        "Subscription will be canceled at the end of the billing period.",
+    });
+  } catch (error) {
+    console.error("Error canceling subscription:", error);
+    res.status(500).json({ message: "Failed to cancel subscription" });
+  }
+};
 
 // Reminder Check Function (to be called by cron)
 export const checkSubscriptionReminders = async () => {
-    const now = new Date();
-    const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    const oneDayFromNow = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
-    
-    // Helper to normalize date range for query (e.g. matching the exact day)
-    const startOfDay = (d: Date) => new Date(d.setHours(0,0,0,0));
-    const endOfDay = (d: Date) => new Date(d.setHours(23,59,59,999));
+  const now = new Date();
+  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const oneDayFromNow = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
 
-    // 7 Days Reminder
-    const subs7Days = await Subscription.find({
-        status: 'active',
-        currentPeriodEnd: {
-            $gte: startOfDay(new Date(sevenDaysFromNow)),
-            $lte: endOfDay(new Date(sevenDaysFromNow))
-        }
-    }).populate('userId');
+  // Helper to normalize date range for query (e.g. matching the exact day)
+  const startOfDay = (d: Date) => new Date(d.setHours(0, 0, 0, 0));
+  const endOfDay = (d: Date) => new Date(d.setHours(23, 59, 59, 999));
 
-    for (const sub of subs7Days) {
-        const user = sub.userId as any;
-        if (user && user.email) {
-            try {
-                // Get price from Stripe subscription
-                const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
-                const amount = stripeSub.items.data[0].price.unit_amount! / 100;
+  // 7 Days Reminder
+  const subs7Days = await Subscription.find({
+    status: "active",
+    currentPeriodEnd: {
+      $gte: startOfDay(new Date(sevenDaysFromNow)),
+      $lte: endOfDay(new Date(sevenDaysFromNow)),
+    },
+  }).populate("userId");
 
-                await sendRenewalReminderEmail(
-                    user.email,
-                    7,
-                    sub.plan,
-                    amount,
-                    sub.currentPeriodEnd
-                );
-                console.log(`[Reminders] Sent 7-day reminder to ${user.email}`);
-            } catch (error) {
-                console.error(`[Reminders] Failed to send 7-day reminder to ${user.email}:`, error);
-            }
-        }
+  for (const sub of subs7Days) {
+    const user = sub.userId as any;
+    if (user && user.email) {
+      try {
+        // Get price from Stripe subscription
+        const stripeSub = await stripe.subscriptions.retrieve(
+          sub.stripeSubscriptionId
+        );
+        const amount = stripeSub.items.data[0].price.unit_amount! / 100;
+
+        await sendRenewalReminderEmail(
+          user.email,
+          7,
+          sub.plan,
+          amount,
+          sub.currentPeriodEnd
+        );
+        console.log(`[Reminders] Sent 7-day reminder to ${user.email}`);
+      } catch (error) {
+        console.error(
+          `[Reminders] Failed to send 7-day reminder to ${user.email}:`,
+          error
+        );
+      }
+    }
+  }
+
+  // 1 Day Reminder
+  const subs1Day = await Subscription.find({
+    status: "active",
+    currentPeriodEnd: {
+      $gte: startOfDay(new Date(oneDayFromNow)),
+      $lte: endOfDay(new Date(oneDayFromNow)),
+    },
+  }).populate("userId");
+
+  for (const sub of subs1Day) {
+    const user = sub.userId as any;
+    if (user && user.email) {
+      try {
+        // Get price from Stripe subscription
+        const stripeSub = await stripe.subscriptions.retrieve(
+          sub.stripeSubscriptionId
+        );
+        const amount = stripeSub.items.data[0].price.unit_amount! / 100;
+
+        await sendRenewalReminderEmail(
+          user.email,
+          1,
+          sub.plan,
+          amount,
+          sub.currentPeriodEnd
+        );
+        console.log(`[Reminders] Sent 1-day reminder to ${user.email}`);
+      } catch (error) {
+        console.error(
+          `[Reminders] Failed to send 1-day reminder to ${user.email}:`,
+          error
+        );
+      }
+    }
+  }
+};
+
+// Activate Free Trial - Manual activation by user
+export const activateFreeTrial = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user._id;
+
+    // Check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
 
-    // 1 Day Reminder
-    const subs1Day = await Subscription.find({
-        status: 'active',
-        currentPeriodEnd: {
-            $gte: startOfDay(new Date(oneDayFromNow)),
-            $lte: endOfDay(new Date(oneDayFromNow))
-        }
-    }).populate('userId');
-
-    for (const sub of subs1Day) {
-        const user = sub.userId as any;
-        if (user && user.email) {
-            try {
-                // Get price from Stripe subscription
-                const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId);
-                const amount = stripeSub.items.data[0].price.unit_amount! / 100;
-
-                await sendRenewalReminderEmail(
-                    user.email,
-                    1,
-                    sub.plan,
-                    amount,
-                    sub.currentPeriodEnd
-                );
-                console.log(`[Reminders] Sent 1-day reminder to ${user.email}`);
-            } catch (error) {
-                console.error(`[Reminders] Failed to send 1-day reminder to ${user.email}:`, error);
-            }
-        }
+    // Check if user already has an active subscription or trial
+    if (user.subscription.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "You already have an active subscription or trial",
+      });
     }
-}
+
+    // Check if user has already used their trial (had trial plan before)
+    if (user.subscription.plan === "trial" && !user.subscription.isActive) {
+      return res.status(400).json({
+        success: false,
+        message: "You have already used your free trial",
+      });
+    }
+
+    // Activate 14-day free trial
+    const startDate = new Date();
+    const endDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
+
+    user.subscription = {
+      plan: "trial",
+      isActive: true,
+      startDate,
+      endDate,
+    };
+
+    await user.save();
+
+    console.log(`✅ Free trial activated for user ${user.email}`);
+
+    res.status(200).json({
+      success: true,
+      message:
+        "Free trial activated successfully! Enjoy 14 days of full access.",
+      subscription: {
+        plan: user.subscription.plan,
+        isActive: user.subscription.isActive,
+        startDate: user.subscription.startDate,
+        endDate: user.subscription.endDate,
+      },
+    });
+  } catch (error: any) {
+    console.error("Error activating free trial:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to activate free trial",
+      error: error.message,
+    });
+  }
+};

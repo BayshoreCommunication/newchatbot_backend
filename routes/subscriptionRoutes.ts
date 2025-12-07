@@ -1,8 +1,9 @@
 import express from "express";
 import {
+  activateFreeTrial,
+  cancelSubscription,
   createCheckoutSession,
   handleWebhook,
-  cancelSubscription,
 } from "../controllers/subscriptionController";
 import { authenticateJWT } from "../middleware/jwtAuth";
 
@@ -16,5 +17,6 @@ const router = express.Router();
 router.post("/create-checkout-session", authenticateJWT, createCheckoutSession);
 router.post("/webhook", handleWebhook);
 router.post("/cancel", authenticateJWT, cancelSubscription);
+router.post("/activate-trial", authenticateJWT, activateFreeTrial);
 
 export default router;
