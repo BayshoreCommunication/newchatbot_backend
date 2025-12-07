@@ -1,15 +1,18 @@
-import mongoose, { Schema, Document } from "mongoose";
 import bcrypt from "bcryptjs";
+import mongoose, { Document, Schema } from "mongoose";
 
 export interface IUser extends Document {
   email: string;
   password?: string;
+  name?: string;
   companyName?: string;
   companyType?: string;
   website?: string;
   language?: string;
   timezone?: string;
   avatar?: string;
+  role?: string;
+  isVerified?: boolean;
   subscription: {
     plan: "none" | "basic" | "pro" | "enterprise" | "trial" | "professional"; // added trial/pro to types
     startDate?: Date;
@@ -34,6 +37,10 @@ const userSchema: Schema<IUser> = new Schema(
       type: String,
       // Not required for Google OAuth users
     },
+    name: {
+      type: String,
+      trim: true,
+    },
     companyName: {
       type: String,
       trim: true,
@@ -56,6 +63,15 @@ const userSchema: Schema<IUser> = new Schema(
     avatar: {
       type: String, // URL to the avatar image
     },
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
+    isVerified: {
+      type: Boolean,
+      default: false,
+    },
     subscription: {
       plan: {
         type: String,
@@ -74,7 +90,7 @@ const userSchema: Schema<IUser> = new Schema(
       },
       stripeCustomerId: {
         type: String,
-      }
+      },
     },
     googleId: {
       type: String,
@@ -100,7 +116,7 @@ userSchema.pre<IUser>("save", async function () {
 userSchema.methods.comparePassword = async function (
   enteredPassword: string
 ): Promise<boolean> {
-    if (!this.password) return false;
+  if (!this.password) return false;
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
