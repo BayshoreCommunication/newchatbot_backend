@@ -1,8 +1,9 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Document, Schema } from "mongoose";
 
 export interface IOTP extends Document {
   email: string;
   otp: string;
+  expiresAt: Date;
   createdAt: Date;
 }
 
@@ -17,10 +18,14 @@ const otpSchema = new Schema<IOTP>(
       type: String,
       required: true,
     },
+    expiresAt: {
+      type: Date,
+      required: true,
+      index: { expires: 0 }, // TTL index - documents expire at expiresAt time
+    },
     createdAt: {
       type: Date,
       default: Date.now,
-      expires: 120, // OTP expires in 2 minutes (120 seconds)
     },
   },
   {

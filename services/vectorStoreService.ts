@@ -36,6 +36,8 @@ export async function storeChunksInPinecone(
     // Initialize Embeddings
     const embeddings = new OpenAIEmbeddings({
       openAIApiKey: process.env.OPENAI_API_KEY,
+      modelName: "text-embedding-3-small",
+      dimensions: 1024, // Match Pinecone index dimension
     });
 
     // Store in Pinecone

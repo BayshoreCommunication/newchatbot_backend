@@ -13,7 +13,9 @@ import { initializeCronJobs } from "./services/cronScheduler";
 config();
 
 // Import routes
+import authCheckRoutes from "./routes/authCheckRoutes";
 import authRoutes from "./routes/authRoutes";
+import llmWebSearchRoutes from "./routes/llmModelWebsearchRoute";
 import unifiedScrapingRoutes from "./routes/unifiedScraping";
 import userRoutes from "./routes/userRoutes";
 const { askRouter } = require("./routes/ask");
@@ -110,6 +112,7 @@ app.get("/health", async (req: Request, res: Response) => {
 
 // API Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/auth-check", authCheckRoutes);
 app.use("/api", userRoutes);
 app.use("/ask", chatLimiter, askRouter);
 app.use("/api", scrapeRouter);
@@ -119,6 +122,7 @@ app.use("/api", leadRouter);
 app.use("/api", knowledgeBaseRouter);
 app.use("/api/subscription", subscriptionRoutes);
 app.use("/api/unified-scraping", unifiedScrapingRoutes);
+app.use("/api/web-search", llmWebSearchRoutes);
 
 // Connect to MongoDB
 connectMongo();

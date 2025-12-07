@@ -1,9 +1,13 @@
 import { Request, Response } from "express";
 import { UnifiedScrapingModel } from "../models/unifiedScrapingModel";
-import { deepScrapeUrls, getChunksForCompany } from "../services/deepScrapingService";
+import {
+  deepScrapeUrls,
+  getChunksForCompany,
+} from "../services/deepScrapingService";
 
 // Import search functions from dataScrapingController
-const API_KEY = process.env.GOOGLE_API_KEY || "AIzaSyDPOfChEDX7uY6ZVU8uJAIaYe55627l0gk";
+const API_KEY =
+  process.env.GOOGLE_API_KEY || "AIzaSyDPOfChEDX7uY6ZVU8uJAIaYe55627l0gk";
 const CX_ID = process.env.GOOGLE_CX_ID || "1243afd78b9d44365";
 
 interface ISearchResult {
@@ -38,7 +42,9 @@ function mapToSearchResult(item: any): ISearchResult {
 // 1. Web Search
 async function searchGoogleApi(query: string): Promise<ISearchResult[]> {
   const exactQuery = `"${query}" -Mario -Kimmel -Bertoldo -directory -yellowpages`;
-  const url = `https://www.googleapis.com/customsearch/v1?key=${API_KEY}&cx=${CX_ID}&q=${encodeURIComponent(exactQuery)}`;
+  const url = `https://www.googleapis.com/customsearch/v1?key=${API_KEY}&cx=${CX_ID}&q=${encodeURIComponent(
+    exactQuery
+  )}`;
 
   try {
     const res = await fetch(url);
@@ -60,9 +66,13 @@ async function searchGoogleApi(query: string): Promise<ISearchResult[]> {
 }
 
 // 2. Social Media Search
-async function searchSocialMedia(companyName: string): Promise<ISearchResult[]> {
+async function searchSocialMedia(
+  companyName: string
+): Promise<ISearchResult[]> {
   const socialQuery = `intitle:"${companyName}" (site:linkedin.com/company OR site:facebook.com OR site:instagram.com OR site:twitter.com OR site:youtube.com)`;
-  const url = `https://www.googleapis.com/customsearch/v1?key=${API_KEY}&cx=${CX_ID}&q=${encodeURIComponent(socialQuery)}`;
+  const url = `https://www.googleapis.com/customsearch/v1?key=${API_KEY}&cx=${CX_ID}&q=${encodeURIComponent(
+    socialQuery
+  )}`;
 
   try {
     const res = await fetch(url);
@@ -73,7 +83,10 @@ async function searchSocialMedia(companyName: string): Promise<ISearchResult[]> 
       const title = item.title.toLowerCase();
       const link = item.link.toLowerCase();
       const company = companyName.toLowerCase();
-      const isProfile = !link.includes("/posts/") && !link.includes("/status/") && !link.includes("/groups/");
+      const isProfile =
+        !link.includes("/posts/") &&
+        !link.includes("/status/") &&
+        !link.includes("/groups/");
       const hasName = title.includes(company);
       return isProfile && hasName;
     });
@@ -95,7 +108,11 @@ export const processCompanyForLLM = async (req: Request, res: Response) => {
     const { companyName, maxUrls = 10 } = req.body;
     const userId = (req as any).user?.id; // Get userId from auth middleware
 
-    if (!companyName || typeof companyName !== "string" || !companyName.trim()) {
+    if (
+      !companyName ||
+      typeof companyName !== "string" ||
+      !companyName.trim()
+    ) {
       return res.status(400).json({
         success: false,
         message: "companyName is required",
@@ -109,7 +126,9 @@ export const processCompanyForLLM = async (req: Request, res: Response) => {
       });
     }
 
-    console.log(`\n🔍 Step 1: Searching Google for "${companyName}" (User: ${userId})...`);
+    console.log(
+      `\n🔍 Step 1: Searching Google for "${companyName}" (User: ${userId})...`
+    );
 
     // STEP 1: Search Google (Web + Social)
     const [webResults, socialResults] = await Promise.all([
@@ -203,7 +222,26 @@ export const processCompanyForLLM = async (req: Request, res: Response) => {
     const successCount = deepScrapeResults.filter((r) => r.success).length;
     const failCount = deepScrapeResults.filter((r) => !r.success).length;
 
-    console.log(`✅ Deep scraping completed: ${successCount} succeeded, ${failCount} failed`);
+    console.log(
+      `✅ Deep scraping completed: ${successCount} succeeded, ${failCount} failed`
+    );
+
+    // Calculate quality score based on data completeness
+    const totalChunks = unifiedScraping.stats.totalChunksGenerated;
+    let quality: "high" | "medium" | "low" = "low";
+    let qualityPercentage = 25;
+
+    if (successCount >= 3 && totalChunks >= 50) {
+      quality = "high";
+      qualityPercentage = 85;
+    } else if (successCount >= 2 && totalChunks >= 20) {
+      quality = "medium";
+      qualityPercentage = 55;
+    }
+
+    console.log(
+      `📊 Quality assessment: ${quality.toUpperCase()} (${qualityPercentage}%) - ${successCount} sources, ${totalChunks} chunks`
+    );
 
     // STEP 5: Return comprehensive response
     return res.status(200).json({
@@ -219,7 +257,7 @@ export const processCompanyForLLM = async (req: Request, res: Response) => {
           totalUrls: allResults.length,
           webUrls: webResults.length,
           socialUrls: socialResults.length,
-          urls: allResults.map(r => ({
+          urls: allResults.map((r) => ({
             title: r.title,
             url: r.link,
             snippet: r.snippet,
@@ -231,7 +269,7 @@ export const processCompanyForLLM = async (req: Request, res: Response) => {
           totalScraped: urlsToScrape.length,
           successCount,
           failCount,
-          scrapedUrls: deepScrapeResults.map(r => ({
+          scrapedUrls: deepScrapeResults.map((r) => ({
             url: r.url,
             success: r.success,
             pageTitle: r.pageTitle || null,
@@ -247,9 +285,11 @@ export const processCompanyForLLM = async (req: Request, res: Response) => {
         knowledgeBase: {
           totalChunks: unifiedScraping.stats.totalChunksGenerated,
           ready: unifiedScraping.stats.totalChunksGenerated > 0,
+          quality,
+          qualityPercentage,
           chunks: unifiedScraping.deepScrapedPages
-            .filter(page => page.status === "completed")
-            .flatMap(page => page.chunks),
+            .filter((page) => page.status === "completed")
+            .flatMap((page) => page.chunks),
         },
       },
     });
@@ -294,7 +334,9 @@ export const getUserScrapingData = async (req: Request, res: Response) => {
       .sort({ createdAt: -1 })
       .limit(Number(limit))
       .skip(skip)
-      .select("-deepScrapedPages.htmlContent -deepScrapedPages.textContent -deepScrapedPages.markdownContent");
+      .select(
+        "-deepScrapedPages.htmlContent -deepScrapedPages.textContent -deepScrapedPages.markdownContent"
+      );
 
     const total = await UnifiedScrapingModel.countDocuments(query);
 
@@ -386,8 +428,8 @@ export const getScrapingChunks = async (req: Request, res: Response) => {
     }
 
     const chunks = data.deepScrapedPages
-      .filter(page => page.status === "completed")
-      .flatMap(page => page.chunks);
+      .filter((page) => page.status === "completed")
+      .flatMap((page) => page.chunks);
 
     return res.status(200).json({
       success: true,
@@ -425,7 +467,7 @@ export const getCompanyChunksByUser = async (req: Request, res: Response) => {
       {
         userId,
         companyName: new RegExp(companyName, "i"),
-        status: "completed"
+        status: "completed",
       },
       { "deepScrapedPages.chunks": 1, companyName: 1, createdAt: 1 }
     ).sort({ createdAt: -1 });
@@ -440,8 +482,8 @@ export const getCompanyChunksByUser = async (req: Request, res: Response) => {
     // Get most recent scraping data
     const latestData = data[0];
     const chunks = latestData.deepScrapedPages
-      .filter(page => page.status === "completed")
-      .flatMap(page => page.chunks);
+      .filter((page) => page.status === "completed")
+      .flatMap((page) => page.chunks);
 
     return res.status(200).json({
       success: true,
@@ -477,7 +519,10 @@ export const deleteScrapingData = async (req: Request, res: Response) => {
       });
     }
 
-    const data = await UnifiedScrapingModel.findOneAndDelete({ _id: id, userId });
+    const data = await UnifiedScrapingModel.findOneAndDelete({
+      _id: id,
+      userId,
+    });
 
     if (!data) {
       return res.status(404).json({
@@ -516,9 +561,18 @@ export const getUserScrapingStats = async (req: Request, res: Response) => {
     }
 
     const totalSessions = await UnifiedScrapingModel.countDocuments({ userId });
-    const completedSessions = await UnifiedScrapingModel.countDocuments({ userId, status: "completed" });
-    const processingSessions = await UnifiedScrapingModel.countDocuments({ userId, status: "processing" });
-    const failedSessions = await UnifiedScrapingModel.countDocuments({ userId, status: "failed" });
+    const completedSessions = await UnifiedScrapingModel.countDocuments({
+      userId,
+      status: "completed",
+    });
+    const processingSessions = await UnifiedScrapingModel.countDocuments({
+      userId,
+      status: "processing",
+    });
+    const failedSessions = await UnifiedScrapingModel.countDocuments({
+      userId,
+      status: "failed",
+    });
 
     // Get aggregate statistics
     const aggregateStats = await UnifiedScrapingModel.aggregate([
@@ -531,8 +585,8 @@ export const getUserScrapingStats = async (req: Request, res: Response) => {
           totalChunksGenerated: { $sum: "$stats.totalChunksGenerated" },
           totalCompletedPages: { $sum: "$stats.completedPages" },
           totalFailedPages: { $sum: "$stats.failedPages" },
-        }
-      }
+        },
+      },
     ]);
 
     const stats = aggregateStats[0] || {
@@ -544,7 +598,9 @@ export const getUserScrapingStats = async (req: Request, res: Response) => {
     };
 
     // Get list of unique companies
-    const companies = await UnifiedScrapingModel.distinct("companyName", { userId });
+    const companies = await UnifiedScrapingModel.distinct("companyName", {
+      userId,
+    });
 
     return res.status(200).json({
       success: true,
@@ -565,7 +621,7 @@ export const getUserScrapingStats = async (req: Request, res: Response) => {
           totalChunksGenerated: stats.totalChunksGenerated,
           totalCompletedPages: stats.totalCompletedPages,
           totalFailedPages: stats.totalFailedPages,
-        }
+        },
       },
     });
   } catch (error: any) {

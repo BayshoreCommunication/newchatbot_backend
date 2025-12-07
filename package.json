@@ -38,6 +38,7 @@
     "@types/stripe": "^8.0.417",
     "@types/xml2js": "^0.4.14",
     "axios": "^1.6.0",
+    "bcrypt": "^6.0.0",
     "bcryptjs": "^2.4.3",
     "bull": "^4.16.5",
     "cheerio": "^1.1.2",
@@ -65,6 +66,7 @@
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/bcryptjs": "^2.4.6",
     "@types/express-session": "^1.18.0",
     "@types/jsonwebtoken": "^9.0.6",
