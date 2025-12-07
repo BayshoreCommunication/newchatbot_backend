@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from "mongoose";
+import mongoose, { Document, Schema } from "mongoose";
 
 // Interface for Search Result Metadata
 export interface ISearchResultMetadata {
@@ -109,93 +109,109 @@ export interface IUnifiedScrapingModel extends Document {
 }
 
 // Document Chunk Schema
-const DocumentChunkSchema = new Schema({
-  content: { type: String, required: true },
-  metadata: {
-    source: String,
-    chunkIndex: Number,
-    totalChunks: Number,
-    pageTitle: String,
-    companyName: String,
-    scrapedDate: Date,
+const DocumentChunkSchema = new Schema(
+  {
+    content: { type: String, required: true },
+    metadata: {
+      source: String,
+      chunkIndex: Number,
+      totalChunks: Number,
+      pageTitle: String,
+      companyName: String,
+      scrapedDate: Date,
+    },
   },
-}, { _id: false });
+  { _id: false }
+);
 
 // Search Result Metadata Schema
-const SearchResultMetadataSchema = new Schema({
-  image: String,
-  description: String,
-  siteName: String,
-  author: String,
-  publishedTime: String,
-  type: String,
-  favicon: String,
-}, { _id: false });
+const SearchResultMetadataSchema = new Schema(
+  {
+    image: String,
+    description: String,
+    siteName: String,
+    author: String,
+    publishedTime: String,
+    type: String,
+    favicon: String,
+  },
+  { _id: false }
+);
 
 // Search Result Schema
-const SearchResultSchema = new Schema({
-  title: { type: String, required: true },
-  link: { type: String, required: true },
-  snippet: { type: String, required: true },
-  metadata: SearchResultMetadataSchema,
-}, { _id: false });
+const SearchResultSchema = new Schema(
+  {
+    title: { type: String, required: true },
+    link: { type: String, required: true },
+    snippet: { type: String, required: true },
+    metadata: SearchResultMetadataSchema,
+  },
+  { _id: false }
+);
 
 // Deep Scraped Page Schema
-const DeepScrapedPageSchema = new Schema({
-  url: {
-    type: String,
-    required: true,
+const DeepScrapedPageSchema = new Schema(
+  {
+    url: {
+      type: String,
+      required: true,
+    },
+    pageTitle: String,
+
+    // Raw Content
+    htmlContent: String,
+    textContent: String,
+    markdownContent: String,
+
+    // Structured Data
+    headings: [String],
+    paragraphs: [String],
+    links: [
+      {
+        text: String,
+        href: String,
+      },
+    ],
+    images: [
+      {
+        alt: String,
+        src: String,
+      },
+    ],
+
+    // Metadata
+    meta: {
+      description: String,
+      keywords: String,
+      author: String,
+      publishedDate: Date,
+      lastModified: Date,
+    },
+
+    // LLM-Ready Document Chunks
+    chunks: [DocumentChunkSchema],
+    totalChunks: {
+      type: Number,
+      default: 0,
+    },
+
+    // Processing Status
+    status: {
+      type: String,
+      enum: ["pending", "processing", "completed", "failed"],
+      default: "pending",
+    },
+    error: String,
+
+    // Timestamps
+    scrapedAt: {
+      type: Date,
+      default: Date.now,
+    },
+    processedAt: Date,
   },
-  pageTitle: String,
-
-  // Raw Content
-  htmlContent: String,
-  textContent: String,
-  markdownContent: String,
-
-  // Structured Data
-  headings: [String],
-  paragraphs: [String],
-  links: [{
-    text: String,
-    href: String,
-  }],
-  images: [{
-    alt: String,
-    src: String,
-  }],
-
-  // Metadata
-  meta: {
-    description: String,
-    keywords: String,
-    author: String,
-    publishedDate: Date,
-    lastModified: Date,
-  },
-
-  // LLM-Ready Document Chunks
-  chunks: [DocumentChunkSchema],
-  totalChunks: {
-    type: Number,
-    default: 0
-  },
-
-  // Processing Status
-  status: {
-    type: String,
-    enum: ["pending", "processing", "completed", "failed"],
-    default: "pending",
-  },
-  error: String,
-
-  // Timestamps
-  scrapedAt: {
-    type: Date,
-    default: Date.now
-  },
-  processedAt: Date,
-}, { _id: true, timestamps: true });
+  { _id: true, timestamps: true }
+);
 
 // Unified Scraping Model Schema
 const UnifiedScrapingSchema = new Schema<IUnifiedScrapingModel>(
@@ -205,19 +221,19 @@ const UnifiedScrapingSchema = new Schema<IUnifiedScrapingModel>(
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
-      index: true
+      index: true,
     },
 
     // Company and Query Information
     companyName: {
       type: String,
       required: true,
-      index: true
+      index: true,
     },
     query: {
       type: String,
       required: true,
-      index: true
+      index: true,
     },
 
     // Search Results
@@ -226,8 +242,8 @@ const UnifiedScrapingSchema = new Schema<IUnifiedScrapingModel>(
       socialResults: [SearchResultSchema],
       totalResults: {
         type: Number,
-        default: 0
-      }
+        default: 0,
+      },
     },
 
     // Deep Scraped Pages
@@ -238,7 +254,7 @@ const UnifiedScrapingSchema = new Schema<IUnifiedScrapingModel>(
       type: String,
       enum: ["pending", "processing", "completed", "failed"],
       default: "pending",
-      index: true
+      index: true,
     },
     error: String,
 
@@ -246,24 +262,24 @@ const UnifiedScrapingSchema = new Schema<IUnifiedScrapingModel>(
     stats: {
       totalSearchResults: {
         type: Number,
-        default: 0
+        default: 0,
       },
       totalPagesScraped: {
         type: Number,
-        default: 0
+        default: 0,
       },
       totalChunksGenerated: {
         type: Number,
-        default: 0
+        default: 0,
       },
       completedPages: {
         type: Number,
-        default: 0
+        default: 0,
       },
       failedPages: {
         type: Number,
-        default: 0
-      }
+        default: 0,
+      },
     },
 
     // Timestamps
@@ -282,30 +298,31 @@ UnifiedScrapingSchema.index({ companyName: 1, createdAt: -1 }); // Get all scrap
 UnifiedScrapingSchema.index({ query: 1, createdAt: -1 }); // Get scraping data by query
 
 // Pre-save middleware to calculate stats
-UnifiedScrapingSchema.pre('save', function(next) {
-  if (this.isModified('deepScrapedPages') || this.isModified('searchResults')) {
+UnifiedScrapingSchema.pre("save", function (next: any) {
+  if (this.isModified("deepScrapedPages") || this.isModified("searchResults")) {
     this.stats.totalSearchResults =
       (this.searchResults.webResults?.length || 0) +
       (this.searchResults.socialResults?.length || 0);
 
     this.stats.totalPagesScraped = this.deepScrapedPages?.length || 0;
 
-    this.stats.completedPages = this.deepScrapedPages?.filter(
-      page => page.status === 'completed'
-    ).length || 0;
+    this.stats.completedPages =
+      this.deepScrapedPages?.filter((page) => page.status === "completed")
+        .length || 0;
 
-    this.stats.failedPages = this.deepScrapedPages?.filter(
-      page => page.status === 'failed'
-    ).length || 0;
+    this.stats.failedPages =
+      this.deepScrapedPages?.filter((page) => page.status === "failed")
+        .length || 0;
 
-    this.stats.totalChunksGenerated = this.deepScrapedPages?.reduce(
-      (total, page) => total + (page.totalChunks || 0),
-      0
-    ) || 0;
+    this.stats.totalChunksGenerated =
+      this.deepScrapedPages?.reduce(
+        (total, page) => total + (page.totalChunks || 0),
+        0
+      ) || 0;
   }
 
   // Update completedAt timestamp when status changes to completed
-  if (this.isModified('status') && this.status === 'completed') {
+  if (this.isModified("status") && this.status === "completed") {
     this.completedAt = new Date();
   }
 

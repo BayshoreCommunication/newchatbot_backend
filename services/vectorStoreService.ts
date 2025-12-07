@@ -1,7 +1,7 @@
-import { Pinecone } from "@pinecone-database/pinecone";
 import { OpenAIEmbeddings } from "@langchain/openai";
 import { PineconeStore } from "@langchain/pinecone";
-import { IDocumentChunk } from "../models/deepScrapingModels";
+import { Pinecone } from "@pinecone-database/pinecone";
+import { IDocumentChunk } from "../models/unifiedScrapingModel";
 
 // Initialize Pinecone
 const pinecone = new Pinecone({
@@ -13,9 +13,15 @@ const pineconeIndex = pinecone.Index(process.env.PINECONE_INDEX!);
 /**
  * Store document chunks in Pinecone
  */
-export async function storeChunksInPinecone(chunks: IDocumentChunk[], companyName: string, userId?: string) {
+export async function storeChunksInPinecone(
+  chunks: IDocumentChunk[],
+  companyName: string,
+  userId?: string
+) {
   try {
-    console.log(`🌲 Storing ${chunks.length} chunks in Pinecone for ${companyName}...`);
+    console.log(
+      `🌲 Storing ${chunks.length} chunks in Pinecone for ${companyName}...`
+    );
 
     // Create LangChain documents
     const documents = chunks.map((chunk) => ({
@@ -35,7 +41,7 @@ export async function storeChunksInPinecone(chunks: IDocumentChunk[], companyNam
     // Store in Pinecone
     // Using LangChain's PineconeStore for easy integration
     await PineconeStore.fromDocuments(documents, embeddings, {
-      pineconeIndex: pineconeIndex,
+      pineconeIndex: pineconeIndex as any,
       namespace: companyName.toLowerCase().replace(/\s+/g, "-"), // Use company name as namespace
     });
 
